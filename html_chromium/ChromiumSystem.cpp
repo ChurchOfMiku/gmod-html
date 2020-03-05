@@ -21,6 +21,24 @@
 namespace fs = std::experimental::filesystem;
 #endif
 
+// GModCEFCodecFix: Widevine CDM
+#include "include/cef_web_plugin.h"
+#include <sstream>
+#if defined(OSX)
+#include "include/cef_path_util.h"
+#include <CoreServices/CoreServices.h>
+#elif defined(_WIN32)
+#include <initguid.h>
+#include <KnownFolders.h>
+#include <ShlObj.h>
+#else
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <pwd.h>
+#endif
+// GModCEFCodecFix: END
+
 class ChromiumApp
 	: public CefApp
 {
@@ -214,6 +232,53 @@ bool ChromiumSystem::Init( const char* pBaseDir, IHtmlResourceHandler* pResource
 #else
 	void* sandbox_info = nullptr;
 #endif
+
+	// GModCEFCodecFix: Widevine CDM
+	std::wstringstream cdmPath;
+#if defined(OSX)
+	CefString applicationSupportPath;
+	if (CefGetPath(PK_USER_DATA, applicationSupportPath) || applicationSupportPath.empty()) {
+		// WARN: Deprecated APIs!!! Consider the "proper way" of writing an Objective C++ wrapper to handle this
+		FSRef fsReference;
+		char applicationSupportPathInternal[PATH_MAX];
+
+		FSFindFolder(kUserDomain, kApplicationSupportFolderType, kCreateFolder, &fsReference);
+		FSRefMakePath(&fsReference, (UInt8*)&applicationSupportPathInternal, PATH_MAX);
+
+		applicationSupportPath = CefString(applicationSupportPathInternal);
+	}
+	cdmPath << applicationSupportPath.ToWString() << L"/Steam/config/widevine/mac-x64";
+#elif defined(_WIN32)
+	wchar_t* localAppDataPath = 0;
+	SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &localAppDataPath);
+
+#if defined(__x86_64__) || defined(_WIN64)
+	cdmPath << localAppDataPath << L"/Steam/widevine/win-x64";
+#else
+	cdmPath << localAppDataPath << L"/Steam/widevine/win-ia32";
+#endif
+
+	CoTaskMemFree(static_cast<void*>(localAppDataPath));
+#else
+	CefStringWide steamPath;
+	steamPath = CefStringWide(getenv("HOME"));
+	if (steamPath.empty()) {
+		steamPath = CefStringWide(getpwuid(getuid())->pw_dir);
+	}
+
+	struct stat statBuff;
+	std::string tempSteamPath = steamPath.ToString() + "/.steam/steam";
+	if (stat(tempSteamPath.c_str(), &statBuff) != 0 || !S_ISDIR(statBuff.st_mode)) {
+		tempSteamPath = steamPath.ToString() + "/.local/share/Steam";
+	}
+
+	steamPath = tempSteamPath;
+
+	cdmPath << steamPath.ToWString() << L"/config/widevine/linux-x64";
+#endif
+
+	CefRegisterWidevineCdm(cdmPath.str(), NULL);
+	// GModCEFCodecFix: END
 
 	if ( !CefInitialize( main_args, settings, new ChromiumApp, sandbox_info ) )
 	{
