@@ -39,8 +39,21 @@ namespace fs = std::experimental::filesystem;
 #endif
 // GModCEFCodecFix: END
 
+class EmptyV8Handler : public CefV8Handler {
+public:
+	EmptyV8Handler() {}
+
+	virtual bool Execute( const CefString& name, CefRefPtr<CefV8Value> object, const CefV8ValueList& arguments, CefRefPtr<CefV8Value>& retval, CefString& exception ) override
+	{
+		return true;
+	}
+
+	IMPLEMENT_REFCOUNTING(EmptyV8Handler);
+};
+
 class ChromiumApp
 	: public CefApp
+	, public CefRenderProcessHandler
 {
 public:
 	//
@@ -84,6 +97,37 @@ public:
 		registrar->AddCustomScheme( "asset", CEF_SCHEME_OPTION_STANDARD | CEF_SCHEME_OPTION_CSP_BYPASSING );
 	}
 
+	//
+	// CefRenderProcessHandler: This implements a Stub for Notifications, allowing Netflix to work
+	//
+	// TODO: Figure out why neither GetRenderProcessHandler nor OnContextCreated is being called (or is it and LOG just isn't working?)
+	/*
+	CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override
+	{
+		LOG(ERROR) << "GetRenderProcessHandler";
+		return this;
+	}
+
+	void OnContextCreated( CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context> context ) override
+	{
+		LOG(ERROR) << "OnContextCreated";
+
+		CefRefPtr<CefV8Value> object = context->GetGlobal();
+
+		CefRefPtr<CefV8Handler> emptyFunc = new EmptyV8Handler();
+
+		CefRefPtr<CefV8Value> notificationFunc = CefV8Value::CreateFunction("Notification", emptyFunc);
+
+		object->SetValue("Notification", notificationFunc, V8_PROPERTY_ATTRIBUTE_NONE);
+
+		std::string notificationStubExtension =
+			"window.Notification = function() {};"
+			"window.Notification.requestPermission = function() { return new Promise(function(resolve, reject) { resolve('denied'); }) };"
+			"window.Notification.permission = 'denied';";
+
+		CefRegisterExtension("solsticegamestudios/notificationStub", notificationStubExtension, NULL);
+	}
+	*/
 private:
 	IMPLEMENT_REFCOUNTING( ChromiumApp );
 };
@@ -126,7 +170,7 @@ bool ChromiumSystem::Init( const char* pBaseDir, IHtmlResourceHandler* pResource
 	settings.no_sandbox = false;
 #endif
 	settings.command_line_args_disabled = true;
-	settings.log_severity = LOGSEVERITY_VERBOSE;
+	settings.log_severity = LOGSEVERITY_DEFAULT;
 
 #ifdef _WIN32
 	// Chromium will be sad if we don't resolve any NTFS junctions for it
