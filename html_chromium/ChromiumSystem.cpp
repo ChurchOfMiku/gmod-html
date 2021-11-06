@@ -21,24 +21,6 @@
 namespace fs = std::experimental::filesystem;
 #endif
 
-// GModCEFCodecFix: Widevine CDM
-#include "include/cef_web_plugin.h"
-#include <sstream>
-#if defined(OSX)
-#include "include/cef_path_util.h"
-#include <CoreServices/CoreServices.h>
-#elif defined(_WIN32)
-#include <initguid.h>
-#include <KnownFolders.h>
-#include <ShlObj.h>
-#else
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <pwd.h>
-#endif
-// GModCEFCodecFix: END
-
 class EmptyV8Handler : public CefV8Handler {
 public:
 	EmptyV8Handler() {}
@@ -224,7 +206,7 @@ bool ChromiumSystem::Init( const char* pBaseDir, IHtmlResourceHandler* pResource
 		chromiumDir = targetPath.string();
 	}
 
-	CefString( &settings.user_agent ).FromString( "Mozilla/5.0 (Windows NT; Valve Source Client) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 GMod/13" );
+	CefString( &settings.user_agent ).FromString( "Mozilla/5.0 (Windows NT; Valve Source Client) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36 GMod/13" );
 
 	// GMOD: GO - We use the same resources with 32-bit and 64-bit builds, so always use the 32-bit bin path for them
 	CefString( &settings.resources_dir_path ).FromString( chromiumDir );
@@ -232,7 +214,7 @@ bool ChromiumSystem::Init( const char* pBaseDir, IHtmlResourceHandler* pResource
 
 	settings.multi_threaded_message_loop = true;
 #elif LINUX
-	CefString( &settings.user_agent ).FromString( "Mozilla/5.0 (Linux; Valve Source Client) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 GMod/13" );
+	CefString( &settings.user_agent ).FromString( "Mozilla/5.0 (Linux; Valve Source Client) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36 GMod/13" );
 
 #if defined(__x86_64__) || defined(_WIN64)
 	CefString( &settings.browser_subprocess_path ).FromString( strBaseDir + "/bin/linux64/chromium_process" );
@@ -246,7 +228,7 @@ bool ChromiumSystem::Init( const char* pBaseDir, IHtmlResourceHandler* pResource
 
 	settings.multi_threaded_message_loop = true;
 #elif OSX
-	CefString( &settings.user_agent ).FromString( "Mozilla/5.0 (Macintosh; Intel Mac OS X; Valve Source Client) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36 GMod/13" );
+	CefString( &settings.user_agent ).FromString( "Mozilla/5.0 (Macintosh; Valve Source Client) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36 GMod/13" );
 #else
 #error
 #endif
@@ -279,53 +261,6 @@ bool ChromiumSystem::Init( const char* pBaseDir, IHtmlResourceHandler* pResource
 #else
 	void* sandbox_info = nullptr;
 #endif
-
-	// GModCEFCodecFix: Widevine CDM
-	std::wstringstream cdmPath;
-#if defined(OSX)
-	CefString applicationSupportPath;
-	if (CefGetPath(PK_USER_DATA, applicationSupportPath) || applicationSupportPath.empty()) {
-		// WARN: Deprecated APIs!!! Consider the "proper way" of writing an Objective C++ wrapper to handle this
-		FSRef fsReference;
-		char applicationSupportPathInternal[PATH_MAX];
-
-		FSFindFolder(kUserDomain, kApplicationSupportFolderType, kCreateFolder, &fsReference);
-		FSRefMakePath(&fsReference, (UInt8*)&applicationSupportPathInternal, PATH_MAX);
-
-		applicationSupportPath = CefString(applicationSupportPathInternal);
-	}
-	cdmPath << applicationSupportPath.ToWString() << L"/Steam/config/widevine/mac-x64";
-#elif defined(_WIN32)
-	wchar_t* localAppDataPath = 0;
-	SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &localAppDataPath);
-
-#if defined(__x86_64__) || defined(_WIN64)
-	cdmPath << localAppDataPath << L"/Steam/widevine/win-x64";
-#else
-	cdmPath << localAppDataPath << L"/Steam/widevine/win-ia32";
-#endif
-
-	CoTaskMemFree(static_cast<void*>(localAppDataPath));
-#else
-	CefStringWide steamPath;
-	steamPath = CefStringWide(getenv("HOME"));
-	if (steamPath.empty()) {
-		steamPath = CefStringWide(getpwuid(getuid())->pw_dir);
-	}
-
-	struct stat statBuff;
-	std::string tempSteamPath = steamPath.ToString() + "/.steam/steam";
-	if (stat(tempSteamPath.c_str(), &statBuff) != 0 || !S_ISDIR(statBuff.st_mode)) {
-		tempSteamPath = steamPath.ToString() + "/.local/share/Steam";
-	}
-
-	steamPath = tempSteamPath;
-
-	cdmPath << steamPath.ToWString() << L"/config/widevine/linux-x64";
-#endif
-
-	CefRegisterWidevineCdm(cdmPath.str(), NULL);
-	// GModCEFCodecFix: END
 
 	if ( !CefInitialize( main_args, settings, new ChromiumApp, sandbox_info ) )
 	{
@@ -384,8 +319,6 @@ IHtmlClient* ChromiumSystem::CreateClient( IHtmlClientListener* listener )
 	browserSettings.windowless_frame_rate = 60;
 	browserSettings.javascript_access_clipboard = STATE_DISABLED;
 	browserSettings.javascript_close_windows = STATE_DISABLED;
-	browserSettings.universal_access_from_file_urls = STATE_DISABLED;
-	browserSettings.file_access_from_file_urls = STATE_DISABLED;
 	//browserSettings.webgl = STATE_DISABLED;
 
 	CefRefPtr<ChromiumBrowser> cefClient( new ChromiumBrowser );
